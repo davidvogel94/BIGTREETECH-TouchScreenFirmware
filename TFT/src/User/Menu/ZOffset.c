@@ -211,7 +211,10 @@ void menuZOffset(void)
           // save to EEPROM
           case 2:
             if (infoMachineSettings.EEPROM == 1)
-              popupDialog(DIALOG_TYPE_QUESTION, zOffsetItems.title.index, LABEL_EEPROM_SAVE_INFO, LABEL_CONFIRM, LABEL_CANCEL, saveEepromSettings, NULL, NULL);
+            {
+              setDialogText(zOffsetItems.title.index, LABEL_EEPROM_SAVE_INFO, LABEL_CONFIRM, LABEL_CANCEL);
+              showDialog(DIALOG_TYPE_QUESTION, saveEepromSettings, NULL, NULL);
+            }
             break;
 
           // unlock XY axis

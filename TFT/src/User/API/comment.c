@@ -73,9 +73,8 @@ void parseComment(void)
       {
         setPrintExpectedTime(strtoul(temp_char, NULL, 0));
         setPrintRemainingTime(getPrintExpectedTime());
-
-        if (getPrintProgressSource() < PROG_TIME && infoSettings.prog_source == 1)
-          setPrintProgressSource(PROG_TIME);
+        if (getPrintProgSource() == PROG_FILE && infoSettings.prog_source == 1)
+          setPrintProgSource(PROG_TIME);
       }
     }
     // continue here with "else if" for another token that starts with "t" or "T"
@@ -98,9 +97,8 @@ void parseComment(void)
         temp_char = strtok(NULL, TOKEN_DELIMITERS);
         temp_value = strtoul(temp_char, NULL, 0);  // get the remaining time in seconds
         setPrintRemainingTime(temp_value);
-
-        if (getPrintProgressSource() < PROG_TIME && infoSettings.prog_source == 1)
-          setPrintProgressSource(PROG_TIME);
+        if (getPrintProgSource() == PROG_FILE && infoSettings.prog_source == 1)
+          setPrintProgSource(PROG_TIME);
       }
     }
     // continue here with "else if" for another token that starts with "r" or "R"

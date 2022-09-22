@@ -299,7 +299,7 @@ void hostActionCommands(void)
     else if (ack_seen("Data Left"))  // parsing printing data left
     {
       // format: Data Left <XXXX>/<YYYY> (e.g. Data Left 123/12345)
-      setPrintProgressData(ack_value(), ack_second_value());
+      setPrintProgress(ack_value(), ack_second_value());
     }
     else
     {
@@ -382,18 +382,20 @@ void hostActionCommands(void)
     switch (hostAction.button)
     {
       case 0:
-        popupDialog(DIALOG_TYPE_ALERT, (uint8_t *)"Message", (uint8_t *)hostAction.prompt_begin,
-                    LABEL_CONFIRM, LABEL_NULL, setRunoutAlarmFalse, NULL, NULL);
+        setDialogText((uint8_t *)"Message", (uint8_t *)hostAction.prompt_begin, LABEL_CONFIRM, LABEL_NULL);
+        showDialog(DIALOG_TYPE_ALERT, setRunoutAlarmFalse, NULL, NULL);
         break;
 
       case 1:
-        popupDialog(DIALOG_TYPE_ALERT, (uint8_t *)"Action command", (uint8_t *)hostAction.prompt_begin,
-                    (uint8_t *)hostAction.prompt_button[0], LABEL_NULL, breakAndContinue, NULL, NULL);
+        setDialogText((uint8_t *)"Action command", (uint8_t *)hostAction.prompt_begin,
+                      (uint8_t *)hostAction.prompt_button[0], LABEL_NULL);
+        showDialog(DIALOG_TYPE_ALERT, breakAndContinue, NULL, NULL);
         break;
 
       case 2:
-        popupDialog(DIALOG_TYPE_ALERT, (uint8_t *)"Action command", (uint8_t *)hostAction.prompt_begin,
-                    (uint8_t *)hostAction.prompt_button[0], (uint8_t *)hostAction.prompt_button[1], resumeAndPurge, resumeAndContinue, NULL);
+        setDialogText((uint8_t *)"Action command", (uint8_t *)hostAction.prompt_begin,
+                      (uint8_t *)hostAction.prompt_button[0], (uint8_t *)hostAction.prompt_button[1]);
+        showDialog(DIALOG_TYPE_ALERT, resumeAndPurge, resumeAndContinue, NULL);
         break;
     }
   }
@@ -560,9 +562,11 @@ void parseACK(void)
       else if ((ack_seen("@") && ack_seen("T:")) || ack_seen("T0:"))
       {
         heatSetCurrentTemp(NOZZLE0, ack_value() + 0.5f);
-        heatSetTargetTemp(NOZZLE0, ack_second_value() + 0.5f, FROM_HOST);
 
-        for (uint8_t i = 1; i < MAX_HEATER_COUNT; i++)
+        if (!heatGetSendWaiting(NOZZLE0))
+          heatSyncTargetTemp(NOZZLE0, ack_second_value() + 0.5f);
+
+        for (uint8_t i = 0; i < MAX_HEATER_COUNT; i++)
         {
           if (!heaterDisplayIsValid(i))
             continue;
@@ -570,7 +574,9 @@ void parseACK(void)
           if (ack_seen(heaterID[i]))
           {
             heatSetCurrentTemp(i, ack_value() + 0.5f);
-            heatSetTargetTemp(i, ack_second_value() + 0.5f, FROM_HOST);
+
+            if (!heatGetSendWaiting(i))
+              heatSyncTargetTemp(i, ack_second_value() + 0.5f);
           }
         }
 
@@ -645,8 +651,8 @@ void parseACK(void)
       // parse pause message
       else if (!infoMachineSettings.promptSupport && ack_seen("paused for user"))
       {
-        popupDialog(DIALOG_TYPE_QUESTION, (uint8_t *)"Printer is Paused", (uint8_t *)"Paused for user\ncontinue?",
-                    LABEL_CONFIRM, LABEL_NULL, breakAndContinue, NULL, NULL);
+        setDialogText((uint8_t *)"Printer is Paused", (uint8_t *)"Paused for user\ncontinue?", LABEL_CONFIRM, LABEL_NULL);
+        showDialog(DIALOG_TYPE_QUESTION, breakAndContinue, NULL, NULL);
       }
       // parse host action commands. Required "HOST_ACTION_COMMANDS" and other settings in Marlin
       else if (ack_seen("//action:"))
@@ -660,7 +666,7 @@ void parseACK(void)
         else if (ack_seen("W:")) ack_values_sum(&infoPrintSummary.weight);
         else if (ack_seen("C:")) ack_values_sum(&infoPrintSummary.cost);
 
-        infoPrintSummary.hasFilamentData = true;
+        hasFilamentData = true;
       }
       // parse and store M23, select SD file
       else if (infoMachineSettings.onboardSD == ENABLED && ack_seen("File opened:"))
@@ -683,30 +689,30 @@ void parseACK(void)
 
         startRemotePrint(file_name);  // start print and open Printing menu
       }
-      else if (infoMachineSettings.onboardSD == ENABLED && WITHIN(infoFile.source, FS_ONBOARD_MEDIA, FS_ONBOARD_MEDIA_REMOTE))
+      // parse and store M27
+      else if (infoMachineSettings.onboardSD == ENABLED &&
+               infoFile.source >= FS_ONBOARD_MEDIA && infoFile.source <= FS_ONBOARD_MEDIA_REMOTE &&
+               ack_seen("Not SD printing"))  // if printing from (remote) onboard media
       {
-        // parse and store M27
-        if (ack_seen("SD printing"))  // received "SD printing byte" or "Not SD printing"
-        {
-          if (infoHost.status == HOST_STATUS_RESUMING)
-            setPrintResume(HOST_STATUS_PRINTING);
+        setPrintPause(HOST_STATUS_PAUSED, PAUSE_EXTERNAL);
+      }
+      else if (infoMachineSettings.onboardSD == ENABLED &&
+               infoFile.source >= FS_ONBOARD_MEDIA && infoFile.source <= FS_ONBOARD_MEDIA_REMOTE &&
+               ack_seen("SD printing byte"))  // if printing from (remote) onboard media
+      {
+        setPrintResume(HOST_STATUS_PRINTING);
 
-          if (infoHost.status == HOST_STATUS_PAUSING)
-            setPrintPause(HOST_STATUS_PAUSED, PAUSE_EXTERNAL);
-
-          if (infoHost.status == HOST_STATUS_PRINTING)
-          {
-            if (ack_continue_seen("byte"))  // received "SD printing byte"
-              setPrintProgressData(ack_value(), ack_second_value());
-            else  // received "Not SD printing"
-              setPrintAbort();
-          }
-        }
-        // parse and store M24, printing from (remote) onboard media completed
-        else if (ack_seen("Done printing file"))  // if printing from (remote) onboard media
-        {
-          printEnd();
-        }
+        // parse file data progress.
+        // Format: "SD printing byte <XXXX>/<YYYY>" (e.g. "SD printing byte 123/12345")
+        //
+        setPrintProgress(ack_value(), ack_second_value());
+      }
+      // parse and store M24, printing from (remote) onboard media completed
+      else if (infoMachineSettings.onboardSD == ENABLED &&
+               infoFile.source >= FS_ONBOARD_MEDIA && infoFile.source <= FS_ONBOARD_MEDIA_REMOTE &&
+               ack_seen("Done printing file"))  // if printing from (remote) onboard media
+      {
+        printEnd();
       }
 
       //----------------------------------------
@@ -742,7 +748,8 @@ void parseACK(void)
         if (ack_seen("Max: ")) sprintf(&tmpMsg[strlen(tmpMsg)], "\nMax: %0.5f", ack_value());
         if (ack_seen("Range: ")) sprintf(&tmpMsg[strlen(tmpMsg)], "\nRange: %0.5f", ack_value());
 
-        popupReminder(DIALOG_TYPE_INFO, (uint8_t *)"Repeatability Test", (uint8_t *)tmpMsg);
+        setDialogText((uint8_t *)"Repeatability Test", (uint8_t *)tmpMsg, LABEL_CONFIRM, LABEL_NULL);
+        showDialog(DIALOG_TYPE_INFO, NULL, NULL, NULL);
       }
       // parse M48, standard deviation
       else if (ack_seen("Standard Deviation: "))
@@ -757,7 +764,8 @@ void parseACK(void)
           levelingSetProbedPoint(-1, -1, ack_value());  // save probed Z value
           sprintf(tmpMsg, "%s\nStandard Deviation: %0.5f", (char *)getDialogMsgStr(), ack_value());
 
-          popupReminder(DIALOG_TYPE_INFO, (uint8_t *)"Repeatability Test", (uint8_t *)tmpMsg);
+          setDialogText((uint8_t *)"Repeatability Test", (uint8_t *)tmpMsg, LABEL_CONFIRM, LABEL_NULL);
+          showDialog(DIALOG_TYPE_INFO, NULL, NULL, NULL);
         }
       }
       // parse and store M211 or M503, software endstops state (e.g. from Probe Offset, MBL, Mesh Editor menus)
@@ -772,31 +780,23 @@ void parseACK(void)
       // parse M303, PID autotune finished message
       else if (ack_seen("PID Autotune finished"))
       {
-        pidUpdateStatus(PID_SUCCESS);
+        pidUpdateStatus(true);
       }
       // parse M303, PID autotune failed message
       else if (ack_seen("PID Autotune failed"))
       {
-        pidUpdateStatus(PID_FAILED);
+        pidUpdateStatus(false);
       }
       // parse M303, PID autotune finished message in case of Smoothieware
       else if ((infoMachineSettings.firmwareType == FW_SMOOTHIEWARE) && ack_seen("PID Autotune Complete!"))
       {
         //ack_index += 84; -> need length check
-        pidUpdateStatus(PID_SUCCESS);
+        pidUpdateStatus(true);
       }
       // parse M303, PID autotune failed message in case of Smoothieware
       else if ((infoMachineSettings.firmwareType == FW_SMOOTHIEWARE) && ack_seen("// WARNING: Autopid did not resolve within"))
       {
-        pidUpdateStatus(PID_FAILED);
-      }
-      // parse M306, model predictive temperature control tuning end message (interrupted or finished)
-      else if (ack_seen("MPC Autotune"))
-      {
-        if (ack_continue_seen("finished"))
-          setMpcTuningResult(FINISHED);
-        else if (ack_continue_seen("interrupted"))
-          setMpcTuningResult(INTERRUPTED);
+        pidUpdateStatus(false);
       }
       // parse and store M355, case light message
       else if (ack_seen("Case light:"))
@@ -867,22 +867,21 @@ void parseACK(void)
         if (ack_seen("Y: ")) y = ack_value();
         if (ack_seen("Z: ")) levelingSetProbedPoint(x, y, ack_value());  // save probed Z value
       }
+      // parse and store Delta Calibration settings
       #if DELTA_PROBE_TYPE != 0
-        // parse and store Delta calibration settings
-        else if (ack_seen("Calibration OK"))
-        {
-          BUZZER_PLAY(SOUND_SUCCESS);
-
-          if (infoMachineSettings.EEPROM == 1)
+      else if (ack_seen("Calibration OK"))
+      {
+        BUZZER_PLAY(SOUND_SUCCESS);
+        if (infoMachineSettings.EEPROM == 1)
           {
-            popupDialog(DIALOG_TYPE_SUCCESS, LABEL_DELTA_CONFIGURATION, LABEL_EEPROM_SAVE_INFO,
-                        LABEL_CONFIRM, LABEL_CANCEL, saveEepromSettings, NULL, NULL);
+            setDialogText(LABEL_DELTA_CONFIGURATION, LABEL_EEPROM_SAVE_INFO, LABEL_CONFIRM, LABEL_CANCEL);
+            showDialog(DIALOG_TYPE_SUCCESS, saveEepromSettings, NULL, NULL);
           }
-          else
+        else
           {
             popupReminder(DIALOG_TYPE_SUCCESS, LABEL_DELTA_CONFIGURATION, LABEL_PROCESS_COMPLETED);
-          }
-        }
+          } 
+      } 
       #endif
 
       //----------------------------------------
@@ -907,7 +906,7 @@ void parseACK(void)
       // parse and store axis steps-per-unit (steps/mm) (M92), max acceleration (units/s2) (M201) and max feedrate (units/s) (M203)
       else if (ack_seen("M92") || ack_seen("M201") || ack_seen("M203"))
       {
-        PARAMETER_NAME param = P_STEPS_PER_MM;
+        uint8_t param = P_STEPS_PER_MM;
 
         if (ack_seen("M201")) param = P_MAX_ACCELERATION;  // P_MAX_ACCELERATION
         if (ack_seen("M203")) param = P_MAX_FEED_RATE;     // P_MAX_FEED_RATE
@@ -939,7 +938,7 @@ void parseACK(void)
       // parse and store home offset (M206) and hotend offset (M218)
       else if (ack_seen("M206 X") || ack_seen("M218 T1 X"))
       {
-        PARAMETER_NAME param = P_HOME_OFFSET;
+        uint8_t param = P_HOME_OFFSET;
 
         if (ack_seen("M218")) param = P_HOTEND_OFFSET;  // P_HOTEND_OFFSET
 
@@ -950,7 +949,7 @@ void parseACK(void)
       // parse and store FW retraction (M207) and FW recover (M208)
       else if (ack_seen("M207 S") || ack_seen("M208 S"))
       {
-        PARAMETER_NAME param = P_FWRETRACT;
+        uint8_t param = P_FWRETRACT;
 
         if (ack_seen("M208")) param = P_FWRECOVER;  // P_FWRECOVER
 
@@ -972,31 +971,6 @@ void parseACK(void)
       {
         setParameter(P_AUTO_RETRACT, 0, ack_value());
       }
-      // parse and store hotend PID (M301) and bed PID (M304)
-      else if (ack_seen("M301") || ack_seen("M304"))
-      {
-        PARAMETER_NAME param = P_HOTEND_PID;
-
-        if (ack_seen("M304")) param = P_BED_PID;  // P_BED_PID
-
-        if (ack_seen("P")) setParameter(param, 0, ack_value());
-        if (ack_seen("I")) setParameter(param, 1, ack_value());
-        if (ack_seen("D")) setParameter(param, 2, ack_value());
-      }
-      // parse and store model predictive temperature control
-      else if (ack_seen("M306"))
-      {
-        if (ack_continue_seen("E"))
-        {
-          uint8_t index = ack_value();
-
-          if (ack_continue_seen("P"))
-            setMpcHeaterPower(index, ack_value());
-
-          if (ack_continue_seen("H"))
-            setMpcFilHeatCapacity(index, ack_value());
-        }
-      }
       // parse and store Delta configuration / Delta tower angle (M665) and Delta endstop adjustments (M666)
       //
       // IMPORTANT: It must be placed before the following keywords:
@@ -1004,7 +978,7 @@ void parseACK(void)
       //
       else if (ack_seen("M665") || ack_seen("M666"))
       {
-        PARAMETER_NAME param = P_DELTA_TOWER_ANGLE;
+        uint8_t param = P_DELTA_TOWER_ANGLE;
 
         if (ack_seen("M666")) param = P_DELTA_ENDSTOP;  // P_DELTA_ENDSTOP
 
@@ -1066,24 +1040,14 @@ void parseACK(void)
       // parse and store stepper motor current (M906), TMC hybrid threshold speed (M913) and TMC bump sensitivity (M914)
       else if (ack_seen("M906") || ack_seen("M913") || ack_seen("M914"))
       {
-        PARAMETER_NAME param = P_CURRENT;
+        uint8_t param = P_CURRENT;
 
         if (ack_seen("M913")) param = P_HYBRID_THRESHOLD;  // P_HYBRID_THRESHOLD
         if (ack_seen("M914")) param = P_BUMPSENSITIVITY;   // P_BUMPSENSITIVITY
 
-        int8_t i = (ack_seen("I")) ? ack_value() : 0;
+        uint8_t i = (ack_seen("I")) ? ack_value() : 0;
 
-        // if index is missing or set to -1 (meaning all indexes) then it must be converted to 0
-        // to make sure array index is never negative
-        if (i < 0)
-          i = 0;
-
-        // for M913 and M914, provided index is:
-        //   1->"X1", 2->"X2", 1->"Y1", 2->"Y2", 1->"Z1", 2->"Z2", 3->"Z3", 4->"Z4"
-        // and it must be converted to:
-        //   0->"X1", 1->"X2", 0->"Y1", 1->"Y2", 0->"Z1", 1->"Z2", 2->"Z3", 3->"Z4"
-        // to make sure array index is properly accessed
-        if (param > P_CURRENT && i > 0)
+        if (i > 0)  // "X1"->0, "X2"->1, "Y1"->0, "Y2"->1, "Z1"->0, "Z2"->1, "Z3"->2, "Z4"->3
           i--;
 
         if (ack_seen("X")) setParameter(param, STEPPER_INDEX_X + i, ack_value());
@@ -1093,11 +1057,6 @@ void parseACK(void)
         if (param < P_BUMPSENSITIVITY)  // T and E options not supported by M914
         {
           i = (ack_seen("T")) ? ack_value() : 0;
-
-          // if index is missing or set to -1 (meaning all indexes) then it must be converted to 0
-          // to make sure array index is never negative
-          if (i < 0)
-            i = 0;
 
           if (ack_seen("E")) setParameter(param, STEPPER_INDEX_E0 + i, ack_value());
         }
@@ -1161,7 +1120,7 @@ void parseACK(void)
         infoMachineSettings.autoReportTemp = ack_value();
 
         if (infoMachineSettings.autoReportTemp)
-          storeCmd("M155 S%u\n", heatGetUpdateSeconds());
+          storeCmd("M155 ");
       }
       else if (ack_seen("Cap:AUTOREPORT_POS:"))
       {
@@ -1223,7 +1182,7 @@ void parseACK(void)
       {
         infoMachineSettings.buildPercent = ack_value();
       }
-      else if (ack_seen("Cap:CHAMBER_TEMPERATURE:") && infoSettings.chamber_en == DISABLED)  // auto-detect only if set to disabled
+      else if (ack_seen("Cap:CHAMBER_TEMPERATURE:"))
       {
         infoSettings.chamber_en = ack_value();
       }

@@ -108,16 +108,16 @@ void menuPreheat(void)
         switch (nowHeater)
         {
           case BOTH:
-            heatSetTargetTemp(BED, preheatStore.preheat_bed[key_num], FROM_GUI);
-            heatSetTargetTemp(heatGetCurrentHotend(), preheatStore.preheat_temp[key_num], FROM_GUI);
+            heatSetTargetTemp(BED, preheatStore.preheat_bed[key_num]);
+            heatSetTargetTemp(heatGetCurrentHotend(), preheatStore.preheat_temp[key_num]);
             break;
 
           case BED_PREHEAT:
-            heatSetTargetTemp(BED, preheatStore.preheat_bed[key_num], FROM_GUI);
+            heatSetTargetTemp(BED, preheatStore.preheat_bed[key_num]);
             break;
 
           case NOZZLE0_PREHEAT:
-            heatSetTargetTemp(heatGetCurrentHotend(), preheatStore.preheat_temp[key_num], FROM_GUI);
+            heatSetTargetTemp(heatGetCurrentHotend(), preheatStore.preheat_temp[key_num]);
             break;
         }
         refreshPreheatIcon(&preheatStore, key_num, false);

@@ -19,7 +19,6 @@
  *    "fanPercent": [ 0, 100, 0, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1 ],
  *    "fanRPM": [ -1, -1, -1 ],
  *    "homed": [ 0, 0, 0 ],
- *    "fraction_printed": 0,
  *    "msgBox.mode": -1
  *  }
  *
@@ -123,11 +122,11 @@ void ParseACKJsonParser::value(const char *value)
     case active:
       if (index == 0)
       {
-        heatSetTargetTemp(BED, strtod((char *)value, NULL) + 0.5f, FROM_HOST);
+        heatSyncTargetTemp(BED, strtod((char *)value, NULL) + 0.5f);
       }
       else if (index <= INVALID_HEATER)
       {
-        heatSetTargetTemp(index - 1, strtod((char *)value, NULL) + 0.5f, FROM_HOST);
+        heatSyncTargetTemp(index - 1, strtod((char *)value, NULL) + 0.5f);
       }
       break;
     case standby:
@@ -137,11 +136,11 @@ void ParseACKJsonParser::value(const char *value)
       {
         if (index == 0)
         {
-          heatSetTargetTemp(BED, 0, FROM_HOST);
+          heatSetTargetTemp(BED, 0);
         }
         else if (index <= INVALID_HEATER)
         {
-          heatSetTargetTemp(index - 1, 0, FROM_HOST);
+          heatSetTargetTemp(index - 1, 0);
         }
       }
       break;
@@ -171,12 +170,6 @@ void ParseACKJsonParser::value(const char *value)
       }
       break;
     case fanRPM:
-      break;
-    case fraction_printed:
-      if (getPrintProgressSource() < PROG_RRF)
-        setPrintProgressSource(PROG_RRF);
-      if (getPrintProgressSource() == PROG_RRF)
-        setPrintProgressPercentage((value[0] - '0') * 100 + (value[2] - '0') * 10 + (value[3] - '0'));
       break;
     case mbox_seq:
       seq = strtod((char *)value, NULL);
@@ -227,15 +220,15 @@ void ParseACKJsonParser::value(const char *value)
       else if ((string_start = strstr(value, (char *)"printing byte")) != NULL)       // parse M27  {"seq":21,"resp":"SD printing byte 1226/5040433\n"}
       {
         string_end = strstr(string_start, (char *)"/");
-        setPrintProgressData(atoi(string_start + 14), atoi(string_end + 1));
+        setPrintProgress(atoi(string_start + 14), atoi(string_end + 1));
       }
       else if (strstr(value, (char *)"Auto tuning heater") && strstr(value, (char *)"completed"))
       {
-        pidUpdateStatus(PID_SUCCESS);
+        pidUpdateStatus(true);
       }
       else if (strstr(value, (char *)"Error: M303") || (strstr(value, (char *)"Auto tune of heater") && strstr(value, (char *)"failed")))
       {
-        pidUpdateStatus(PID_FAILED);
+        pidUpdateStatus(false);
       }
 
       break;

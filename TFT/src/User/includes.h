@@ -134,7 +134,6 @@
 #include "NotificationMenu.h"
 #include "ParameterSettings.h"
 #include "PersistentInfo.h"
-#include "MPC.h"
 #include "Pid.h"
 #include "Popup.h"
 #include "PreheatMenu.h"

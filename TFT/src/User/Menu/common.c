@@ -317,14 +317,16 @@ NOZZLE_STATUS warmupNozzle(uint8_t toolIndex, void (* callback)(void))
       sprintf(tempStr, (char *)textSelect(LABEL_HEAT_HOTEND), infoSettings.min_ext_temp);
       strcat(tempMsg, "\n");
       strcat(tempMsg, tempStr);
-      popupDialog(DIALOG_TYPE_ERROR, LABEL_WARNING, (uint8_t *)tempMsg, LABEL_CONFIRM, LABEL_CANCEL, callback, NULL, NULL);
+
+      setDialogText(LABEL_WARNING, (uint8_t *)tempMsg, LABEL_CONFIRM, LABEL_CANCEL);
+      showDialog(DIALOG_TYPE_ERROR, callback, NULL, NULL);
 
       return COLD;
     }
     // temperature falling down to a target lower than the minimal extrusion temperature
     else
     { // contiunue with current temp but no lower than the minimum extruder temperature
-      heatSetTargetTemp(toolIndex, MAX(infoSettings.min_ext_temp, heatGetCurrentTemp(toolIndex)), FROM_GUI);
+      heatSetTargetTemp(toolIndex, MAX(infoSettings.min_ext_temp, heatGetCurrentTemp(toolIndex)));
       return SETTLING;
     }
   }
@@ -340,7 +342,8 @@ NOZZLE_STATUS warmupNozzle(uint8_t toolIndex, void (* callback)(void))
       strcat(tempMsg, "\n");
       strcat(tempMsg, tempStr);
 
-      popupReminder(DIALOG_TYPE_ERROR, LABEL_WARNING, (uint8_t *)tempMsg);
+      setDialogText(LABEL_WARNING, (uint8_t *)tempMsg, LABEL_CONFIRM, LABEL_NULL);
+      showDialog(DIALOG_TYPE_ERROR, NULL, NULL, NULL);
       return COLD;
     }
   }
@@ -359,7 +362,8 @@ void cooldownTemperature(void)
     {
       if (heatGetTargetTemp(i) > 0)
       {
-        popupDialog(DIALOG_TYPE_QUESTION, LABEL_WARNING, LABEL_HEATERS_ON, LABEL_CONFIRM, LABEL_CANCEL, heatCoolDown, NULL, NULL);
+        setDialogText(LABEL_WARNING, LABEL_HEATERS_ON, LABEL_CONFIRM, LABEL_CANCEL);
+        showDialog(DIALOG_TYPE_QUESTION, heatCoolDown, NULL, NULL);
         break;
       }
     }

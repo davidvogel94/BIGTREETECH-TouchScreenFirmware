@@ -114,7 +114,8 @@ void updateFeatureSettings(uint8_t item_index)
       break;
 
     case SKEY_RESET_SETTINGS:
-      popupDialog(DIALOG_TYPE_ALERT, LABEL_SETTINGS_RESET, LABEL_SETTINGS_RESET_INFO, LABEL_CONFIRM, LABEL_CANCEL, resetSettings, NULL, NULL);
+      setDialogText(LABEL_SETTINGS_RESET, LABEL_SETTINGS_RESET_INFO, LABEL_CONFIRM, LABEL_CANCEL);
+      showDialog(DIALOG_TYPE_ALERT, resetSettings, NULL, NULL);
       break;
 
     default:

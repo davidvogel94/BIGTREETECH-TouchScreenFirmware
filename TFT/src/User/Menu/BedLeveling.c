@@ -102,7 +102,8 @@ void menuBedLeveling(void)
             #if DELTA_PROBE_TYPE != 2  // if not removable probe
               ablStart();
             #else  // if removable probe
-              popupDialog(DIALOG_TYPE_ALERT, LABEL_WARNING, LABEL_CONNECT_PROBE, LABEL_CONTINUE, LABEL_CANCEL, ablStart, NULL, NULL);
+              setDialogText(LABEL_WARNING, LABEL_CONNECT_PROBE, LABEL_CONTINUE, LABEL_CANCEL);
+              showDialog(DIALOG_TYPE_ALERT, ablStart, NULL, NULL);
             #endif
           }
         #endif
@@ -112,7 +113,8 @@ void menuBedLeveling(void)
         #if DELTA_PROBE_TYPE != 2
           OPEN_MENU(menuMeshEditor);
         #else
-          popupDialog(DIALOG_TYPE_ALERT, LABEL_WARNING, LABEL_DISCONNECT_PROBE, LABEL_CONTINUE, LABEL_CANCEL, deltaMeshEditor, NULL, NULL);
+          setDialogText(LABEL_WARNING, LABEL_DISCONNECT_PROBE, LABEL_CONTINUE, LABEL_CANCEL);
+          showDialog(DIALOG_TYPE_ALERT, deltaMeshEditor, NULL, NULL);
         #endif
         break;
 
@@ -152,7 +154,8 @@ void menuBedLeveling(void)
             zOffsetSetMenu(true);  // use Probe Offset menu
             OPEN_MENU(menuZOffset);
           #else
-            popupDialog(DIALOG_TYPE_ALERT, LABEL_WARNING, LABEL_DISCONNECT_PROBE, LABEL_CONTINUE, LABEL_CANCEL, deltaZOffset, NULL, NULL);
+            setDialogText(LABEL_WARNING, LABEL_DISCONNECT_PROBE, LABEL_CONTINUE, LABEL_CANCEL);
+            showDialog(DIALOG_TYPE_ALERT, deltaZOffset, NULL, NULL);
           #endif
         }
         break;

@@ -142,7 +142,10 @@ void menuLevelCorner(void)
                                                getLevelEdgeDefault(), infoSettings.level_edge);
 
         if (curLevelEdge >= getLevelEdgeMin() && infoSettings.level_edge < getLevelEdgeMin())  // if new value is below min limit
-          popupDialog(DIALOG_TYPE_QUESTION, LABEL_WARNING, LABEL_LEVEL_CORNER_INFO, LABEL_CONFIRM, LABEL_CANCEL, setLevelEdgeMin, NULL, NULL);
+        {
+          setDialogText(LABEL_WARNING, LABEL_LEVEL_CORNER_INFO, LABEL_CONFIRM, LABEL_CANCEL);
+          showDialog(DIALOG_TYPE_QUESTION, setLevelEdgeMin, NULL, NULL);
+        }
 
         break;
       }
